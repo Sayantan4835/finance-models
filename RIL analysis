@@ -1,0 +1,41 @@
+library(tidyquant)
+library(tidyverse)
+library(timetk)
+library(ggplot2)
+ril <- tq_get("RELIANCE.NS",                    
+                  from ="2010-11-01",
+                  to ="2020-11-01",
+                  get ="stock.prices")
+View(ril)
+ril %>%
+  ggplot(aes(x = date, y = adjusted)) +
+    geom_line() +
+    ggtitle("RIL prices 2010-2020") +
+    labs(x = "Date", "Price") +
+    scale_x_date(date_breaks = "years", date_labels = "%Y") +
+    labs(x = "Date", y = "Adjusted Price")
+ril_monthly_returns <- ril %>%
+  tq_transmute(select = adjusted,
+               mutate_fun = periodReturn,
+               period = "monthly",      
+               col_rename = "RIL_returns")
+View(ril_monthly_returns)
+ril_monthly_returns %>%
+  ggplot(aes(x = date, y = RIL_returns)) +
+  geom_bar(stat = "identity") +
+  theme_classic() +
+  labs(x = "Date", y = "Monthly returns") +
+  ggtitle("Monthly Returns for Reliance") +
+  geom_hline(yintercept = 0) +
+  scale_y_continuous(breaks = seq(-0.6,0.8,0.1),
+                     labels = scales::percent) +
+  scale_x_date(date_breaks = "years", date_labels = "%Y")
+ril_monthly_returns %>%
+  mutate(cr = 100*cumprod(1 + RIL_returns)) %>%
+  mutate(cumulative_returns = (cr - 1)) %>%
+  ggplot(aes(x = date, y = cumulative_returns)) +
+  geom_line() +
+  theme_classic() +
+  labs(x = "Date", y = "RIL Cumulative Returns") +
+  ggtitle("PV of Rs.100 invested in RIL for 2010-2020") +
+  scale_y_continuous(limits = c(0,500))
