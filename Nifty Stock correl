@@ -1,0 +1,40 @@
+library(quantmod)
+library(PerformanceAnalytics)
+library(dygraphs)
+library(tidyquant)
+library(timetk)
+library(ggplot2)
+library(corrplot)
+monthly_returns <- function(ticker, base_year)
+{
+  # Obtain stock price data from Yahoo! Finance
+  stock <- getSymbols(ticker, src = "yahoo", auto.assign = FALSE) 
+  # Remove missing values
+  stock <- na.omit(stock)
+  # Keep only adjusted closing stock prices
+  stock <- stock[, 6]
+  
+  # Confine our observations to begin at the base year and end at the last available trading day
+  horizon <- paste0(as.character(base_year), "/", as.character(Sys.Date()))
+  stock <- stock[horizon]
+  
+  # Calculate monthly arithmetic/log returns
+  data <- periodReturn(stock, period = "monthly", type = "arithmetic/log")
+  
+  # Assign to the global environment to be accessible
+  assign(ticker, data, envir = .GlobalEnv)
+}
+# Call our function for each stock
+a <- monthly_returns("RELIANCE.NS", 2017)
+b <- monthly_returns("HDFCBANK.NS", 2017)
+c <- monthly_returns("TCS.NS", 2017)
+d <- monthly_returns("CIPLA.NS", 2017)
+e <- monthly_returns("HINDUNILVR.NS", 2017)
+
+# Get Nifty 50 Data
+f <- monthly_returns("^NSEI", 2017)
+
+# Merge all the data and create Corrplot
+returns <- merge.xts(a,b,c,d,e,f)
+colnames(returns) <- c("RIL", "HDFCBK", "TCS", "CIPLA", "HUL", "NIFTY50")
+corrplot::corrplot(cor(returns))
