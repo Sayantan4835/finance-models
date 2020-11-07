@@ -1,0 +1,130 @@
+#Sayantan's Portfolio allocation tool
+
+library(quantmod)
+library(PerformanceAnalytics)
+library(dygraphs)
+library(tidyquant)
+library(timetk)
+library(ggplot2)
+library(corrplot)
+library(plotly)
+library(tibble)
+monthly_returns <- function(ticker, base_year)
+{
+  # Obtain stock price data from Yahoo! Finance
+  stock <- getSymbols(ticker, src = "yahoo", auto.assign = FALSE) 
+  # Remove missing values
+  stock <- na.omit(stock)
+  # Keep only adjusted closing stock prices
+  stock <- stock[, 6]
+  
+  # Confine our observations to begin at the base year and end at the last available trading day
+  horizon <- paste0(as.character(base_year), "/", as.character(Sys.Date()))
+  stock <- stock[horizon]
+  
+  # Calculate monthly arithmetic returns
+  data <- periodReturn(stock, period = "monthly", type = "arithmetic")
+  
+  # Assign to the global environment to be accessible
+  assign(ticker, data, envir = .GlobalEnv)
+}
+# Call our function for each stock
+a <- monthly_returns("RELIANCE.NS", 2016)
+b <- monthly_returns("HDFCBANK.NS", 2016)
+c <- monthly_returns("TCS.NS", 2016)
+d <- monthly_returns("CIPLA.NS", 2016)
+e <- monthly_returns("HINDUNILVR.NS", 2016)
+
+# Get Nifty 50 Data
+f <- monthly_returns("^NSEI", 2016)
+
+# Merge all the data and create Corrplot
+returns <- merge.xts(a,b,c,d,e,f)
+colnames(returns) <- c("RIL", "HDFCBK", "TCS", "CIPLA", "HUL", "NIFTY50")
+corrplot::corrplot(cor(returns))
+
+# Starting Portfolio optimization
+print(round(returns, 3))
+meanret <- colMeans(returns)
+print(meanret)
+print(cor(returns))
+
+# Random asset weights
+wts <- runif(n = length(colnames(returns))-1)
+wts <- wts/sum(wts)
+wts[6] = 0
+print(round(wts,3))
+
+#Risk-return framework
+port_returns <- (sum(wts * meanret) + 1)^12 - 1
+port_risk <- sqrt((t(wts) %*% (cor(returns) %*% wts))/21)
+print(port_returns)
+print(port_risk)
+
+#Sharpe Ratio (RFR = 5.9% p.a.)
+sharpe_ratio <- ((port_returns-0.059)/port_risk)
+print(sharpe_ratio)
+
+# Optimization Vector spaces
+num_port <- 1000
+all_wts <- matrix(nrow = num_port,
+                  ncol = length(colnames(returns)))
+port_returns <- vector('numeric', length = num_port)
+port_risk <- vector('numeric', length = num_port)
+sharpe_ratio <- vector('numeric', length = num_port)
+
+# Creating iterative loop
+for (i in seq_along(port_returns)) {
+  
+  wts <- runif(length(colnames(returns))-1)
+  wts[6]=0
+  wts <- wts/sum(wts)
+  
+  # Storing weight in the matrix
+  all_wts[i,] <- wts
+  
+  # Portfolio returns
+  
+  port_ret <- sum(wts * meanret)
+  port_ret <- ((port_ret + 1)^12) - 1
+  
+  # Storing Portfolio Returns values
+  port_returns[i] <- port_ret
+  
+  
+  # Creating and storing portfolio risk
+  port_sd <- sqrt((t(wts) %*% (cor(returns) %*% wts))/21)
+  port_risk[i] <- port_sd
+  
+  # Creating and storing Portfolio Sharpe Ratios
+  
+  sr <- (port_ret-0.059)/port_sd
+  sharpe_ratio[i] <- sr
+  
+}
+#Creating data tables
+portfolio_values <- tibble(Return = port_returns,
+                           Risk = port_risk,
+                           Sharpe_Ratio = sharpe_ratio)
+
+
+# Converting matrix to a tibble and changing column names
+all_wts <- tk_tbl(all_wts)
+colnames(all_wts) <- colnames(returns)
+
+# Combing all the values together
+portfolio_values <- tk_tbl(cbind(all_wts, portfolio_values))
+head(portfolio_values)
+
+#Optimal portfolios
+min_var <- portfolio_values[which.min(portfolio_values$Risk),]
+max_sr <- portfolio_values[which.max(portfolio_values$Sharpe_Ratio),]
+print(min_var)
+print(max_sr)
+
+#Optimal allocation plots (Max SR)
+com <- c(RIL,HDFCBank,TCS,Cipla,HUL)
+opwt <- c(max_sr$RIL,max_sr$HDFCBK,max_sr$TCS,max_sr$CIPLA,max_sr$HUL)
+dtf <- data.frame(com,opwt)
+print(dtf)                  
+ggplot() + geom_point(data=dtf, aes(x=dtf$com,y=dtf$opwt),size=5,color="green")+labs(title = "Dynamic Portfolio Allocation", x = "Stock", y = "Weight")
